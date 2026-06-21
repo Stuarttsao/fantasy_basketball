@@ -43,6 +43,49 @@ def main() -> None:
     team_metadata = read_processed_csv("teams.csv")
     transaction_actions = read_processed_csv("transaction_actions.csv")
     weekly_team_stats = read_processed_csv("weekly_team_stats.csv")
+    matchups = read_processed_csv("matchups.csv")
+
+    records = {
+        team["team_key"]: {"wins": 0, "losses": 0, "ties": 0}
+        for team in team_metadata
+    }
+    standings_history = []
+    for week in range(1, 21):
+        for matchup in matchups:
+            if int(matchup["week"]) != week:
+                continue
+            team_1 = records[matchup["team_1_key"]]
+            team_2 = records[matchup["team_2_key"]]
+            if matchup["is_tied"] == "1":
+                team_1["ties"] += 1
+                team_2["ties"] += 1
+            elif int(matchup["team_1_category_wins"]) > int(matchup["team_2_category_wins"]):
+                team_1["wins"] += 1
+                team_2["losses"] += 1
+            else:
+                team_2["wins"] += 1
+                team_1["losses"] += 1
+
+        weekly_rows = []
+        for team in team_metadata:
+            record = records[team["team_key"]]
+            games = record["wins"] + record["losses"] + record["ties"]
+            win_pct = (record["wins"] + record["ties"] * 0.5) / games if games else 0
+            weekly_rows.append({
+                "week": week,
+                "team_key": team["team_key"],
+                "team_name": team["team_name"],
+                **record,
+                "win_pct": round(win_pct, 4),
+            })
+        ordered_pcts = sorted({row["win_pct"] for row in weekly_rows}, reverse=True)
+        rank_by_pct = {
+            pct: 1 + sum(1 for row in weekly_rows if row["win_pct"] > pct)
+            for pct in ordered_pcts
+        }
+        for row in weekly_rows:
+            row["rank"] = rank_by_pct[row["win_pct"]]
+            standings_history.append(row)
 
     activity_by_team = {}
     for team in team_metadata:
@@ -107,6 +150,8 @@ def main() -> None:
         "trades": trades,
         "managerActivity": list(activity_by_team.values()),
         "weeklyTeamStats": weekly_team_stats,
+        "standingsHistory": standings_history,
+        "matchups": matchups,
     }
 
     html = """<!doctype html>
@@ -192,6 +237,24 @@ def main() -> None:
     .heat-cell.missing { background: repeating-linear-gradient(135deg, #f1eee7, #f1eee7 5px, #e7e3da 5px, #e7e3da 10px); color: var(--muted); font-size: 10px; }
     .heatmap-legend { display: flex; align-items: center; gap: 9px; margin-top: 10px; color: var(--muted); font-size: 12px; }
     .rank-gradient { width: 180px; height: 10px; background: linear-gradient(90deg, hsl(145 38% 72%), #f3f0e9, hsl(2 48% 73%)); }
+    .bracket-shell { overflow-x: auto; padding: 8px 2px 14px; }
+    .bracket { display: grid; grid-template-columns: repeat(3, minmax(250px, 1fr)); gap: 46px; min-width: 880px; align-items: stretch; }
+    .bracket-round { position: relative; display: flex; flex-direction: column; justify-content: space-around; gap: 22px; min-height: 360px; }
+    .bracket-round:not(:last-child)::after { content: "→"; position: absolute; top: 50%; right: -34px; transform: translateY(-50%); color: var(--line); font-size: 28px; font-weight: 800; }
+    .bracket-round-title { color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+    .bracket-game { background: var(--white); border: 1px solid var(--line); box-shadow: 0 8px 22px rgba(34,33,31,.06); }
+    .bracket-game-label { padding: 7px 10px; border-bottom: 1px solid var(--line); color: var(--muted); background: var(--soft); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .bracket-team { display: grid; grid-template-columns: 25px minmax(0,1fr) auto; gap: 8px; align-items: center; padding: 10px; border-top: 1px solid var(--line); }
+    .bracket-team:first-of-type { border-top: 0; }
+    .bracket-team.winner { background: var(--good-soft); color: var(--good); font-weight: 800; }
+    .bracket-team.loser { color: var(--muted); }
+    .bracket-seed { display: grid; place-items: center; width: 23px; height: 23px; border: 1px solid currentColor; border-radius: 50%; font-size: 10px; font-weight: 800; }
+    .bracket-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bracket-score { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .bracket-champion { border: 2px solid var(--good); }
+    .bracket-champion .bracket-game-label { color: var(--white); background: var(--good); border-color: var(--good); }
+    .bracket-section-title { margin: 28px 0 8px; }
+    .bracket-note { color: var(--muted); font-size: 12px; }
     .scatter-dot { stroke: var(--white); stroke-width: 2; }
     .scatter-label { fill: var(--ink); font: 10px "Avenir Next", sans-serif; }
     .identity-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; color: var(--muted); font-size: 12px; }
@@ -516,17 +579,26 @@ def main() -> None:
     <section>
       <div class="section-heading">
         <h2>How the season evolved</h2>
-        <details class="info"><summary aria-label="About weekly category ranking">i</summary><div class="info-card">For each week and category, teams are placed from 0 to 100 relative to the other teams with Yahoo results that week. The best result is 100 and the worst is 0. Turnovers are reversed because fewer is better. The nine category positions are averaged, then teams are ranked by that average. Missing postseason results remain explicitly blank.</div></details>
+        <details class="info"><summary aria-label="About season evolution">i</summary><div class="info-card"><strong>Standings position</strong> uses cumulative matchup record through each week. A tie counts as half a win, and equal winning percentages share a rank. <strong>Category strength</strong> separately ranks that week’s nine category results, with turnovers reversed because fewer is better.</div></details>
       </div>
       <div class="visual-card">
-        <div class="visual-title"><h3>Regular season</h3><span>Weeks 1–20</span></div>
+        <div class="visual-title"><h3>Standings by record</h3><span>Weeks 1–20</span></div>
+        <p class="chart-caption">Each cell shows the team’s league position and cumulative W–L–T record after that week. Teams with the same winning percentage share a position.</p>
+        <div id="standings-race"></div>
+      </div>
+      <div class="visual-card">
+        <div class="visual-title"><h3>Weekly category strength</h3><span>Regular season · Weeks 1–20</span></div>
         <p class="chart-caption">Complete data: 240 of 240 possible team-week results. Each cell shows that week’s rank and the average of the team’s nine category positions.</p>
         <div id="regular-season-race"></div>
       </div>
       <div class="visual-card">
-        <div class="visual-title"><h3>Playoffs and consolation bracket</h3><span>Weeks 21–23</span></div>
-        <p class="chart-caption">Yahoo records: Week 21 has 8 teams, Week 22 has 12, and Week 23 has 8. Striped cells mean no matchup result; no value is carried forward.</p>
-        <div id="playoff-race"></div>
+        <div class="visual-title"><h3>Postseason brackets</h3><span>Weeks 21–23</span></div>
+        <p class="chart-caption">Yahoo reseeded the championship bracket after the opening round. Green rows show each matchup winner.</p>
+        <h4 class="bracket-section-title">Championship bracket</h4>
+        <div id="championship-bracket"></div>
+        <h4 class="bracket-section-title">Consolation bracket</h4>
+        <p class="bracket-note">Placement games determine seventh through twelfth place.</p>
+        <div id="consolation-bracket"></div>
       </div>
     </section>
 
@@ -560,13 +632,26 @@ def main() -> None:
 
     <section>
       <div class="section-heading">
-        <h2 class="good-text">Top picks</h2>
-        <details class="info"><summary aria-label="How top picks are measured">i</summary><div class="info-card">Value above replacement drives this list. Adjusted rank gain compares draft position with final rank and caps downside at replacement rank 157.</div></details>
+        <h2>Top drafted players</h2>
+        <details class="info"><summary aria-label="How top drafted players are measured">i</summary><div class="info-card">This list is ordered by final value above replacement. It identifies the most valuable players who were drafted, regardless of whether they were obvious early picks or late-round finds.</div></details>
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Player</th><th>Team</th><th>Pick</th><th>Final BBM rank</th><th>Value above replacement</th><th>Adjusted rank gain</th></tr></thead>
+          <thead><tr><th>Player</th><th>Team</th><th>Pick</th><th>Final BBM rank</th><th>Value above replacement</th></tr></thead>
           <tbody id="top-picks"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-heading">
+        <h2 class="good-text">Best draft steals</h2>
+        <details class="info"><summary aria-label="How draft steals are measured">i</summary><div class="info-card">Draft steals are ordered by how many places a player finished above his draft position. For example, pick 108 finishing 15th gains 93 places. Final value above replacement is included so the result still shows how useful the player actually was.</div></details>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Player</th><th>Team</th><th>Drafted</th><th>Final BBM rank</th><th>Places gained</th><th>Value above replacement</th></tr></thead>
+          <tbody id="draft-steals"></tbody>
         </table>
       </div>
     </section>
@@ -915,6 +1000,32 @@ barChart("#reliance-chart", reliance, "drafted_value_share", pct);
 const turnover = [...data.construction].sort((a,b) => num(b.roster_turnover)-num(a.roster_turnover));
 barChart("#turnover-chart", turnover, "roster_turnover", pct, "turnover");
 
+function standingsRankHeatmap(target) {
+  const root = document.querySelector(target);
+  const weeks = Array.from({length:20}, (_,index) => index + 1);
+  const historyByTeamWeek = new Map(
+    data.standingsHistory.map(row => [`${row.team_key}:${row.week}`, row])
+  );
+  const teams = [...data.standings].sort((a,b) => num(a.playoff_seed)-num(b.playoff_seed));
+  const columns = `180px repeat(${weeks.length}, minmax(56px, 1fr))`;
+  const headers = `<div class="heat-cell header">Team</div>` +
+    weeks.map(week => `<div class="heat-cell header">W${week}</div>`).join("");
+  const rows = teams.map(team => {
+    const manager = team.manager_name || team.team_name;
+    const cells = weeks.map(week => {
+      const row = historyByTeamWeek.get(`${team.team_key}:${week}`);
+      if (!row) return `<div class="heat-cell missing">No result</div>`;
+      const rank = num(row.rank);
+      const hue = 145 - (rank-1)/11*143;
+      const lightness = 91 - Math.abs(6.5-rank)/5.5*16;
+      const record = `${row.wins}-${row.losses}-${row.ties}`;
+      return `<div class="heat-cell rank" style="background:hsl(${hue} 38% ${lightness}%)" title="${esc(team.team_name)} · after Week ${week}: position #${rank}; record ${record}; winning percentage ${num(row.win_pct).toFixed(3)}">#${rank}<small>${record}</small></div>`;
+    }).join("");
+    return `<div class="heat-cell team">${esc(manager)}<small>${esc(team.team_name)}</small></div>${cells}`;
+  }).join("");
+  root.innerHTML = `<div class="rank-heatmap-scroll"><div class="rank-heatmap" style="grid-template-columns:${columns}">${headers}${rows}</div></div><div class="heatmap-legend"><span>Higher standings position</span><span class="rank-gradient"></span><span>Lower standings position</span><span>Cell: position · cumulative W–L–T</span></div>`;
+}
+
 function categoryRankHeatmap(target, startWeek, endWeek) {
   const root = document.querySelector(target);
   const weeks = Array.from({length:endWeek-startWeek+1}, (_,index) => startWeek + index);
@@ -948,6 +1059,84 @@ function categoryRankHeatmap(target, startWeek, endWeek) {
   root.innerHTML = `<div class="rank-heatmap-scroll"><div class="rank-heatmap ${endWeek-startWeek <= 3 ? "playoffs" : ""}" style="grid-template-columns:${columns}">${headers}${rows}</div></div><div class="heatmap-legend"><span>Higher weekly rank</span><span class="rank-gradient"></span><span>Lower weekly rank</span><span>Cell: rank · nine-category average</span></div>`;
 }
 
+function postseasonBracket(target, rounds) {
+  const gameCard = item => {
+    const game = item.game;
+    const team1Wins = num(game.team_1_category_wins);
+    const team2Wins = num(game.team_2_category_wins);
+    const winnerKey = team1Wins > team2Wins ? game.team_1_key : game.team_2_key;
+    const teamRow = (key, name, score) => {
+      const standing = standingsByTeam.get(key);
+      const won = key === winnerKey;
+      return `<div class="bracket-team ${won ? "winner" : "loser"}">
+        <span class="bracket-seed">${esc(standing?.playoff_seed || "—")}</span>
+        <span class="bracket-name">${esc(name)}</span>
+        <span class="bracket-score">${esc(score)}</span>
+      </div>`;
+    };
+    return `<article class="bracket-game ${item.championship ? "bracket-champion" : ""}">
+      <div class="bracket-game-label">${esc(item.label)}</div>
+      ${teamRow(game.team_1_key, game.team_1_name, game.team_1_category_wins)}
+      ${teamRow(game.team_2_key, game.team_2_name, game.team_2_category_wins)}
+    </article>`;
+  };
+  document.querySelector(target).innerHTML = `<div class="bracket-shell"><div class="bracket">${rounds.map(round => `
+    <div class="bracket-round">
+      <div class="bracket-round-title">${esc(round.title)}</div>
+      ${round.games.map(gameCard).join("")}
+    </div>`).join("")}</div></div>`;
+}
+
+const postseasonGames = data.matchups.filter(game => num(game.week) >= 21);
+const mainGames = postseasonGames.filter(game => game.is_consolation !== "1");
+const consolationGames = postseasonGames.filter(game => game.is_consolation === "1");
+const finalRank = teamKey => num(standingsByTeam.get(teamKey)?.rank);
+const highestFinish = game => Math.min(finalRank(game.team_1_key), finalRank(game.team_2_key));
+const byHighestFinish = games => [...games].sort((a,b) => highestFinish(a)-highestFinish(b));
+
+const championshipRounds = [
+  {
+    title: "Opening round · Week 21",
+    games: byHighestFinish(mainGames.filter(game => num(game.week) === 21)).map(game => ({game, label: "Quarterfinal"}))
+  },
+  {
+    title: "Semifinals · Week 22",
+    games: byHighestFinish(mainGames.filter(game => num(game.week) === 22)).map(game => ({
+      game,
+      label: highestFinish(game) <= 4 ? "Semifinal" : "Fifth-place game"
+    }))
+  },
+  {
+    title: "Finals · Week 23",
+    games: byHighestFinish(mainGames.filter(game => num(game.week) === 23)).map(game => ({
+      game,
+      label: highestFinish(game) <= 2 ? "Championship" : "Third-place game",
+      championship: highestFinish(game) <= 2
+    }))
+  }
+];
+
+const consolationRounds = [
+  {
+    title: "Opening round · Week 21",
+    games: byHighestFinish(consolationGames.filter(game => num(game.week) === 21)).map(game => ({game, label: "Consolation opening round"}))
+  },
+  {
+    title: "Placement round · Week 22",
+    games: byHighestFinish(consolationGames.filter(game => num(game.week) === 22)).map(game => ({
+      game,
+      label: highestFinish(game) <= 10 ? "Seventh-place semifinal" : "Eleventh-place game"
+    }))
+  },
+  {
+    title: "Final placements · Week 23",
+    games: byHighestFinish(consolationGames.filter(game => num(game.week) === 23)).map(game => ({
+      game,
+      label: highestFinish(game) <= 8 ? "Seventh-place game" : "Ninth-place game"
+    }))
+  }
+];
+
 function scatterChart(target, rows, options) {
   const width = 520, height = 390;
   const margin = {top:22, right:24, bottom:48, left:52};
@@ -976,8 +1165,10 @@ function scatterChart(target, rows, options) {
   document.querySelector(target).innerHTML = `<svg class="chart-svg" viewBox="0 0 ${width} ${height}">${grid}${axes}${dots}</svg>`;
 }
 
+standingsRankHeatmap("#standings-race");
 categoryRankHeatmap("#regular-season-race", 1, 20);
-categoryRankHeatmap("#playoff-race", 21, 23);
+postseasonBracket("#championship-bracket", championshipRounds);
+postseasonBracket("#consolation-bracket", consolationRounds);
 
 const draftFinishRows = data.teams.map(team => ({
   ...team,
@@ -1080,7 +1271,23 @@ document.querySelector("#top-picks").innerHTML = topPicks.map(player => `
     <td>${esc(player.pick)}</td>
     <td>${esc(player.bbm_rank)}</td>
     <td class="good-text">+${num(player.value_above_replacement).toFixed(3)}</td>
-    <td>${num(player.draft_position_gain) >= 0 ? "+" : ""}${esc(player.draft_position_gain)}</td>
+  </tr>`).join("");
+
+const draftSteals = [...rankedPlayers]
+  .filter(player => num(player.draft_position_gain) > 0)
+  .sort((a,b) =>
+    num(b.draft_position_gain)-num(a.draft_position_gain) ||
+    num(b.value_above_replacement)-num(a.value_above_replacement)
+  )
+  .slice(0, 12);
+document.querySelector("#draft-steals").innerHTML = draftSteals.map(player => `
+  <tr>
+    <td><strong>${esc(player.player_name)}</strong></td>
+    <td>${esc(player.team_name)}</td>
+    <td>Pick ${esc(player.pick)}</td>
+    <td>${esc(player.bbm_rank)}</td>
+    <td class="good-text"><strong>+${esc(player.draft_position_gain)}</strong></td>
+    <td>+${num(player.value_above_replacement).toFixed(3)}</td>
   </tr>`).join("");
 
 const worstPicks = [...rankedPlayers]
