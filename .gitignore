@@ -1,0 +1,14 @@
+.local/
+.env
+.env.*
+.DS_Store
+*.crt
+*.key
+*.pem
+data/raw/yahoo-*/
+data/raw/player-rankings-*/
+data/processed/*
+!data/processed/.gitkeep
+analysis/*.csv
+__pycache__/
+*.pyc
