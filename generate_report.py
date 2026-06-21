@@ -42,6 +42,7 @@ def main() -> None:
     trades = read_csv("trade_ledger.csv")
     team_metadata = read_processed_csv("teams.csv")
     transaction_actions = read_processed_csv("transaction_actions.csv")
+    weekly_team_stats = read_processed_csv("weekly_team_stats.csv")
 
     activity_by_team = {}
     for team in team_metadata:
@@ -105,6 +106,7 @@ def main() -> None:
         "teamWeekPower": team_week_power,
         "trades": trades,
         "managerActivity": list(activity_by_team.values()),
+        "weeklyTeamStats": weekly_team_stats,
     }
 
     html = """<!doctype html>
@@ -138,12 +140,12 @@ def main() -> None:
     }
     main { width: calc(100% - 40px); max-width: 1100px; min-width: 0; margin: 0 auto; padding: 38px 0 84px; }
     h1, h2, h3, .summary-card .value {
-      font-family: "Noteworthy", "Bradley Hand", "Segoe Print", "Comic Sans MS", cursive;
-      font-weight: 600;
+      font-family: "Avenir Next", Avenir, "Helvetica Neue", Arial, sans-serif;
+      font-weight: 750;
     }
-    h1 { font-size: clamp(38px, 7vw, 72px); line-height: 1.02; letter-spacing: -0.03em; margin: 0; max-width: 820px; }
-    h2 { font-size: 31px; line-height: 1.1; margin: 0 0 18px; }
-    h3 { margin: 0; font-size: 22px; }
+    h1 { font-size: clamp(38px, 7vw, 68px); line-height: .98; letter-spacing: -0.055em; margin: 0; max-width: 820px; }
+    h2 { font-size: 30px; line-height: 1.08; letter-spacing: -.035em; margin: 0 0 18px; }
+    h3 { margin: 0; font-size: 21px; letter-spacing: -.025em; }
     p { margin: 0; }
     .eyebrow { color: var(--blue); text-transform: uppercase; letter-spacing: .14em; font-weight: 700; margin-bottom: 15px; overflow-wrap: anywhere; }
     .lede { color: var(--muted); max-width: 760px; font-size: 17px; margin-top: 14px; }
@@ -229,6 +231,92 @@ def main() -> None:
     .summary-card .label { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .08em; }
     .summary-card .value { font-size: 27px; margin-top: 7px; }
     .summary-card .detail { color: var(--muted); margin-top: 4px; }
+    .awards-grid {
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: minmax(270px, 31%);
+      gap: 16px;
+      max-width: 100%;
+      padding: 4px 4px 18px;
+      overflow-x: auto;
+      overscroll-behavior-inline: contain;
+      scroll-snap-type: inline mandatory;
+      scrollbar-width: thin;
+      scrollbar-color: var(--blue) var(--soft);
+    }
+    .awards-grid::-webkit-scrollbar { height: 8px; }
+    .awards-grid::-webkit-scrollbar-track { background: var(--soft); }
+    .awards-grid::-webkit-scrollbar-thumb { background: var(--blue); border-radius: 999px; }
+    .award-card {
+      --award-accent: var(--ochre);
+      position: relative;
+      aspect-ratio: 4 / 5;
+      min-height: 420px;
+      overflow: hidden;
+      padding: 0;
+      color: var(--ink);
+      background: #f9f6ee;
+      border: 1px solid #cec8bc;
+      box-shadow: 0 18px 40px rgba(34,33,31,.12);
+      cursor: pointer;
+      appearance: none;
+      width: 100%;
+      text-align: left;
+      font: inherit;
+      scroll-snap-align: start;
+    }
+    .award-card::after {
+      content: "";
+      position: absolute;
+      z-index: 4;
+      inset: 10px;
+      border: 1px solid rgba(29,28,24,.16);
+      pointer-events: none;
+    }
+    .award-card:hover { transform: translateY(-3px); transition: transform .18s ease; }
+    .award-visual {
+      position: relative;
+      display: block;
+      height: 48%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 78% 28%, color-mix(in srgb, var(--award-accent) 85%, white) 0 11%, transparent 11.5%),
+        linear-gradient(145deg, #191816, #302c27);
+    }
+    .award-art {
+      position: absolute;
+      inset: 0;
+      background-position: center top;
+      background-size: cover;
+      opacity: 1;
+    }
+    .award-topline { position: absolute; z-index: 2; top: 20px; left: 20px; right: 20px; display: flex; justify-content: space-between; gap: 12px; color: rgba(255,255,255,.78); font-size: 10px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; text-shadow: 0 1px 6px rgba(0,0,0,.35); }
+    .award-number { color: var(--award-accent); }
+    .award-content { display: flex; flex-direction: column; height: 52%; padding: 19px 22px 18px; text-align: left; }
+    .award-copy { display: block; }
+    .award-title { display: block; max-width: 96%; color: var(--muted); font-size: 11px; font-weight: 800; line-height: 1.2; letter-spacing: .1em; text-transform: uppercase; }
+    .award-winner { display: block; margin-top: 7px; font-size: clamp(20px, 2.2vw, 27px); font-weight: 800; line-height: 1.05; letter-spacing: -.035em; }
+    .award-manager { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
+    .award-stat { display: block; margin-top: auto; }
+    .award-stat strong { display: block; color: var(--award-accent); font: 800 clamp(34px, 5vw, 54px)/.9 "Avenir Next", Avenir, "Helvetica Neue", Arial, sans-serif; letter-spacing: -.055em; }
+    .award-stat span { display: block; max-width: 96%; margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.3; }
+    .award-footer { display: flex; justify-content: space-between; margin-top: 10px; color: #8c877d; font-size: 8px; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
+    .award-card[data-award="champion"] { --award-accent: #e6bf5b; }
+    .award-card[data-award="draft"] { --award-accent: #6fc494; }
+    .award-card[data-award="pickup"] { --award-accent: #71a7d3; }
+    .award-card[data-award="steal"] { --award-accent: #bc91cf; }
+    .award-card[data-award="category"] { --award-accent: #e28a66; }
+    .award-card[data-award="activity"] { --award-accent: #d7a75f; }
+    .award-card[data-award="photo-finish"] { --award-accent: #ef7d69; }
+    .award-card[data-award="last-day"] { --award-accent: #79b8d8; }
+    .carousel-hint { display: flex; align-items: center; gap: 8px; margin: 8px 0 12px; color: var(--muted); font-size: 12px; }
+    .carousel-hint::after { content: "→"; color: var(--blue); font-size: 18px; }
+    .award-share-note { margin-top: 12px; color: var(--muted); font-size: 12px; }
+    .award-modal { position: fixed; z-index: 100; inset: 0; display: none; place-items: center; padding: 24px; background: rgba(20,19,17,.88); }
+    .award-modal.open { display: grid; }
+    .award-modal-inner { position: relative; width: min(540px, calc(100vw - 32px)); }
+    .award-modal .award-card { width: 100%; min-height: 0; cursor: default; transform: none; }
+    .award-close { position: absolute; z-index: 2; top: -14px; right: -14px; width: 34px; height: 34px; border: 1px solid rgba(255,255,255,.3); border-radius: 50%; color: white; background: #1c1a18; font-size: 20px; cursor: pointer; }
     .section-intro { color: var(--muted); max-width: 820px; margin: -8px 0 20px; }
     .chart-list { display: grid; gap: 10px; }
     .chart-row {
@@ -262,7 +350,7 @@ def main() -> None:
     .team-hero { display: grid; grid-template-columns: 120px 1fr; gap: 22px; padding: 28px; color: var(--white); background: var(--ink); }
     .finish-badge { display: grid; align-content: center; justify-items: center; min-height: 115px; border: 1px solid rgba(255,255,255,.28); }
     .finish-badge span { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; opacity: .7; }
-    .finish-badge strong { font: 600 54px/1 "Noteworthy", "Bradley Hand", cursive; }
+    .finish-badge strong { font: 800 52px/1 "Avenir Next", Avenir, "Helvetica Neue", Arial, sans-serif; letter-spacing: -.05em; }
     .team-hero h3 { color: var(--white); font-size: 34px; }
     .team-card .meta { color: rgba(255,255,255,.68); margin-top: 5px; }
     .hero-stats { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 17px; }
@@ -307,7 +395,7 @@ def main() -> None:
     .timeline { margin-top: 24px; padding-top: 22px; border-top: 2px dashed var(--line); }
     .timeline-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
     .timeline-head h4 { margin: 0; font-size: 16px; }
-    .week-label { font-family: "Noteworthy", "Bradley Hand", cursive; font-size: 21px; color: var(--blue); }
+    .week-label { font-family: "Avenir Next", Avenir, "Helvetica Neue", Arial, sans-serif; font-size: 19px; font-weight: 750; letter-spacing: -.025em; color: var(--blue); }
     .week-slider { width: 100%; margin: 14px 0 20px; accent-color: var(--blue); }
     .timeline-grid { display: grid; grid-template-columns: minmax(260px, .9fr) 1.2fr 1fr; gap: 18px; align-items: start; }
     .timeline-panel { border: 1px solid var(--line); background: var(--white); min-height: 250px; padding: 15px; }
@@ -318,7 +406,7 @@ def main() -> None:
     .radar-axis { stroke: #dedbd3; stroke-width: 1; }
     .radar-shape { fill: rgba(93,118,145,.22); stroke: var(--blue); stroke-width: 2; }
     .radar-label { font: 10px "Avenir Next", sans-serif; fill: var(--muted); }
-    .power-score { text-align: center; font-family: "Noteworthy", "Bradley Hand", cursive; font-size: 22px; }
+    .power-score { text-align: center; font-family: "Avenir Next", Avenir, "Helvetica Neue", Arial, sans-serif; font-size: 21px; font-weight: 750; letter-spacing: -.025em; }
     .roster-list { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 7px; }
     .roster-player { padding: 7px 8px; background: var(--soft); font-size: 13px; display: flex; justify-content: space-between; gap: 8px; }
     .roster-player.entering { animation: roster-enter .34s ease both; }
@@ -365,6 +453,7 @@ def main() -> None:
       .tabs { overflow-x: auto; }
       .tab-button { white-space: nowrap; padding: 9px 13px; }
       .summary-grid, .team-grid, .pick-grid { grid-template-columns: 1fr; }
+      .awards-grid { grid-auto-columns: min(82vw, 330px); }
       .visual-grid, .opportunity-grid, .spotlight-grid, .formula-grid { grid-template-columns: 1fr; }
       .team-picker { align-items: stretch; flex-direction: column; }
       .team-hero { grid-template-columns: 86px 1fr; padding: 20px; }
@@ -402,26 +491,32 @@ def main() -> None:
 
     <section>
       <div class="section-heading">
-        <h2>League at a glance</h2>
-        <details class="info"><summary aria-label="How draft value is calculated">i</summary><div class="info-card">For each draft pick, subtract the BBM value of rank 157. Negative results count as zero. Add that value across all 13 picks.</div></details>
+        <h2>Season outcome</h2>
+        <details class="info"><summary aria-label="About final standings">i</summary><div class="info-card">The podium reflects the final Yahoo playoff result. The table also preserves each team’s regular-season record and playoff seed.</div></details>
       </div>
-      <p class="chart-caption">Final-season draft value by team—the longer the green bar, the more above-replacement value its original 13 picks produced.</p>
-      <div class="chart-list" id="draft-chart"></div>
-      <div class="subsection">
-        <h3>Final standings</h3>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Finish</th><th>Team</th><th>Manager</th><th>Regular-season record</th><th>Playoff seed</th></tr></thead>
-            <tbody id="final-standings"></tbody>
-          </table>
-        </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Finish</th><th>Team</th><th>Manager</th><th>Regular-season record</th><th>Playoff seed</th></tr></thead>
+          <tbody id="final-standings"></tbody>
+        </table>
       </div>
+    </section>
+
+    <section hidden aria-hidden="true">
+      <div class="section-heading">
+        <h2>Awards &amp; season moments</h2>
+        <details class="info"><summary aria-label="About league awards and moments">i</summary><div class="info-card">Awards recognize a season-long achievement. Moments capture a specific matchup that came down to one category, one late move or a razor-thin margin. Click a card for a 4:5 share preview.</div></details>
+      </div>
+      <p class="chart-caption">Season awards first, then the close calls people will actually argue about in the group chat.</p>
+      <div class="carousel-hint">Swipe or scroll through the cards</div>
+      <div class="awards-grid" id="share-cards-grid"></div>
+      <p class="award-share-note">Click any card to preview its future social-share format.</p>
     </section>
 
     <section>
       <div class="section-heading">
-        <h2>Weekly nine-category ranking</h2>
-        <details class="info"><summary aria-label="About weekly category ranking">i</summary><div class="info-card">For each week and category, teams are placed from 0 to 100 relative to the other teams with Yahoo results that week. The best result is 100 and the worst is 0. Turnovers are reversed because fewer is better. The nine category positions are averaged, then teams are ranked by that average. If a postseason team has no row for a week, its nearest available postseason rank is repeated only to connect the line.</div></details>
+        <h2>How the season evolved</h2>
+        <details class="info"><summary aria-label="About weekly category ranking">i</summary><div class="info-card">For each week and category, teams are placed from 0 to 100 relative to the other teams with Yahoo results that week. The best result is 100 and the worst is 0. Turnovers are reversed because fewer is better. The nine category positions are averaged, then teams are ranked by that average. Missing postseason results remain explicitly blank.</div></details>
       </div>
       <div class="visual-card">
         <div class="visual-title"><h3>Regular season</h3><span>Weeks 1–20</span></div>
@@ -433,44 +528,34 @@ def main() -> None:
         <p class="chart-caption">Yahoo records: Week 21 has 8 teams, Week 22 has 12, and Week 23 has 8. Striped cells mean no matchup result; no value is carried forward.</p>
         <div id="playoff-race"></div>
       </div>
-      <div class="visual-grid" style="margin-top:16px">
+    </section>
+
+    <section>
+      <div class="section-heading">
+        <h2>The draft</h2>
+        <details class="info"><summary aria-label="About draft analysis">i</summary><div class="info-card">The draft board shows every selection and final rank. Team draft value adds each pick’s positive BBM value above rank 157. It is a final-results review, not a judgment based on information available on draft night.</div></details>
+      </div>
+      <div class="draft-board-scroll"><div class="draft-board" id="draft-board"></div></div>
+      <div class="draft-board-legend"><span>Worse</span><span class="draft-gradient"></span><span>Better</span></div>
+      <div class="visual-grid" style="margin-top:22px">
+        <div class="visual-card">
+          <div class="visual-title"><h3>Draft value by team</h3><span>Sum above rank 157</span></div>
+          <div class="chart-list" id="draft-chart"></div>
+        </div>
         <div class="visual-card">
           <div class="visual-title"><h3>Draft value vs. final finish</h3><span>Original draft only</span></div>
           <div id="draft-finish-scatter"></div>
         </div>
-        <div class="visual-card">
-          <div class="visual-title"><h3>Moves vs. value added by pickups</h3><span>Labels show player actions</span></div>
-          <div id="transaction-scatter"></div>
+      </div>
+      <div class="subsection">
+        <h3>Draft leaderboard</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Rank</th><th>Team</th><th>Draft value over rank 157</th><th>Picks above rank 157</th><th>Top contributor</th><th>Best steal</th></tr></thead>
+            <tbody id="leaderboard"></tbody>
+          </table>
         </div>
       </div>
-      <div class="formula-grid">
-        <div class="formula-card"><strong>Weekly nine-category average</strong>Each category is converted to a 0–100 position among that week’s teams. The nine positions are averaged equally.<code>(FG% position + FT% position + … + turnover position) ÷ 9</code></div>
-        <div class="formula-card"><strong>Draft value over replacement</strong>For every pick, subtract the BBM value of rank 157. Negative results become zero, then all 13 picks are added.<code>Σ max(player BBM value − rank-157 value, 0)</code></div>
-        <div class="formula-card"><strong>Pickup value while held</strong>A pickup’s value over replacement is multiplied by the fraction of the 167-day fantasy season that the team held him.<code>value over replacement × days held in season ÷ 167</code></div>
-        <div class="formula-card"><strong>Trade value difference</strong>For each team in a trade, add the full-season value over replacement received and subtract the value sent.<code>received value over replacement − sent value over replacement</code></div>
-      </div>
-    </section>
-
-    <section>
-      <div class="section-heading">
-        <h2>Draft leaderboard</h2>
-        <details class="info"><summary aria-label="About the draft leaderboard">i</summary><div class="info-card">For each drafted player, subtract the BBM value of rank 157. Negative results count as zero. Add the results for all 13 picks. This uses final-season results, not information available on draft night.</div></details>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Rank</th><th>Team</th><th>Draft value over rank 157</th><th>Picks above rank 157</th><th>Top contributor</th><th>Best steal</th></tr></thead>
-          <tbody id="leaderboard"></tbody>
-        </table>
-      </div>
-    </section>
-
-    <section>
-      <div class="section-heading">
-        <h2>Draft board</h2>
-        <details class="info"><summary aria-label="How the draft board is colored">i</summary><div class="info-card">Every pick is colored by replacement-adjusted rank change. Green picks beat their draft slot, red picks lost value, and pale cells finished close to expectation. Actual final rank remains visible inside every cell.</div></details>
-      </div>
-      <div class="draft-board-scroll"><div class="draft-board" id="draft-board"></div></div>
-      <div class="draft-board-legend"><span>Worse</span><span class="draft-gradient"></span><span>Better</span></div>
     </section>
 
     <section>
@@ -503,6 +588,27 @@ def main() -> None:
 
     <section>
       <div class="section-heading">
+        <h2>Roster management</h2>
+        <details class="info"><summary aria-label="About roster management">i</summary><div class="info-card">These views compare waiver value, move volume, reliance on original draft picks, and how much each final roster changed from draft night.</div></details>
+      </div>
+      <div class="visual-card">
+        <div class="visual-title"><h3>Moves vs. value added by pickups</h3><span>Labels show player actions</span></div>
+        <div id="transaction-scatter"></div>
+      </div>
+      <div class="visual-grid" style="margin-top:16px">
+        <div class="visual-card">
+          <div class="visual-title"><h3>Value supplied by original draft picks</h3><span>Higher means more draft-reliant</span></div>
+          <div class="chart-list" id="reliance-chart"></div>
+        </div>
+        <div class="visual-card">
+          <div class="visual-title"><h3>Final roster changed from draft night</h3><span>Higher means more turnover</span></div>
+          <div class="chart-list" id="turnover-chart"></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-heading">
         <h2 class="good-text">Best pickups</h2>
         <details class="info"><summary aria-label="How pickup value is calculated">i</summary><div class="info-card">Subtract the BBM value of rank 157 from the player’s final value, then multiply by the fraction of the 167-day fantasy season that the team held him. Trades are excluded.</div></details>
       </div>
@@ -530,7 +636,7 @@ def main() -> None:
     </section>
 
     <section>
-      <div class="section-heading"><h2>How managers built their rosters</h2><details class="info"><summary aria-label="How to read this chart">i</summary><div class="info-card">Horizontal position is the percentage of positive rostered value supplied by original draft picks. Vertical position is Yahoo’s move count. Circle size is completed trades. Color moves from cool to warm as the number of pickups held 14 days or fewer increases.</div></details></div>
+      <div class="section-heading"><h2>Manager styles</h2><details class="info"><summary aria-label="How to read this chart">i</summary><div class="info-card">Horizontal position is the percentage of positive rostered value supplied by original draft picks. Vertical position is Yahoo’s move count. Circle size is completed trades. Color moves from cool to warm as the number of pickups held 14 days or fewer increases.</div></details></div>
       <div class="visual-card">
         <div id="manager-identity-map"></div>
         <div class="identity-legend"><span>Left: less value from drafted players</span><span>Right: more value from drafted players</span><span>Higher: more moves</span><span>Larger: more trades</span><span>Warmer: more pickups held ≤14 days</span></div>
@@ -538,13 +644,13 @@ def main() -> None:
     </section>
 
     <section>
-      <div class="section-heading"><h2>Draft reliance</h2><details class="info"><summary aria-label="About draft reliance">i</summary><div class="info-card">Share of positive rostered player value attributable to original draft picks, weighted by weeks on the roster.</div></details></div>
-      <div class="chart-list" id="reliance-chart"></div>
-    </section>
-
-    <section>
-      <div class="section-heading"><h2>Roster rebuild</h2><details class="info"><summary aria-label="About roster turnover">i</summary><div class="info-card">Final roster is measured at each team’s last active matchup, avoiding post-elimination cleanup moves.</div></details></div>
-      <div class="chart-list" id="turnover-chart"></div>
+      <div class="section-heading"><h2>How the numbers are calculated</h2><details class="info"><summary aria-label="About calculations">i</summary><div class="info-card">The report favors explicit calculations over composite mystery scores. These are the four formulas used most often across the page.</div></details></div>
+      <div class="formula-grid">
+        <div class="formula-card"><strong>Weekly nine-category average</strong>Each category is converted to a 0–100 position among that week’s teams. The nine positions are averaged equally.<code>(FG% position + FT% position + … + turnover position) ÷ 9</code></div>
+        <div class="formula-card"><strong>Draft value over replacement</strong>For every pick, subtract the BBM value of rank 157. Negative results become zero, then all 13 picks are added.<code>Σ max(player BBM value − rank-157 value, 0)</code></div>
+        <div class="formula-card"><strong>Pickup value while held</strong>A pickup’s value over replacement is multiplied by the fraction of the 167-day fantasy season that the team held him.<code>value over replacement × days held in season ÷ 167</code></div>
+        <div class="formula-card"><strong>Trade value difference</strong>For each team in a trade, add the full-season value over replacement received and subtract the value sent.<code>received value over replacement − sent value over replacement</code></div>
+      </div>
     </section>
   </div>
 
@@ -577,6 +683,13 @@ def main() -> None:
     </section>
   </div>
 </main>
+
+<div class="award-modal" id="award-modal" role="dialog" aria-modal="true" aria-label="Award share preview">
+  <div class="award-modal-inner">
+    <button class="award-close" id="award-close" aria-label="Close award preview">×</button>
+    <div id="award-modal-card"></div>
+  </div>
+</div>
 
 <script>
 const data = __DATA__;
@@ -639,6 +752,152 @@ document.querySelector("#summary").innerHTML = podium.map((team, index) => {
   const classes = ["champion", "runner", "third"];
   return `<article class="summary-card ${classes[index]}"><div class="label">${labels[index]}</div><div class="value">${esc(team.team_name)}</div><div class="detail">${esc(team.wins)}-${esc(team.losses)}-${esc(team.ties)} regular season · seed ${esc(team.playoff_seed)}</div></article>`;
 }).join("");
+
+const champion = [...data.standings].sort((a,b) => num(a.rank)-num(b.rank))[0];
+const bestDraftTeam = [...data.teams].sort((a,b) => num(a.draft_rank)-num(b.draft_rank))[0];
+const bestPickupAward = [...data.pickups].sort((a,b) => num(b.pickup_score)-num(a.pickup_score))[0];
+const bestStealAward = [...data.players]
+  .filter(player => player.bbm_rank)
+  .sort((a,b) => num(b.draft_position_gain)-num(a.draft_position_gain))[0];
+const mostActive = [...data.managerActivity].sort((a,b) => num(b.number_of_moves)-num(a.number_of_moves))[0];
+const weeklyStealsRecord = [...data.weeklyTeamStats].sort((a,b) => num(b.steals)-num(a.steals))[0];
+const weeklyStealsManager = standingsByTeam.get(weeklyStealsRecord.team_key)?.manager_name || "";
+
+const awards = [
+  {
+    key: "champion",
+    title: "League Champion",
+    winner: champion.team_name,
+    manager: champion.manager_name,
+    stat: "#1",
+    detail: `${champion.wins}-${champion.losses}-${champion.ties} regular season · playoff seed ${champion.playoff_seed}`
+  },
+  {
+    key: "draft",
+    title: "Draft Room Winner",
+    winner: bestDraftTeam.team_name,
+    manager: standingsByTeam.get(bestDraftTeam.team_key)?.manager_name || "",
+    stat: num(bestDraftTeam.draft_score).toFixed(3),
+    detail: `total BBM value above rank 157 · ${bestDraftTeam.players_above_replacement} of 13 picks above replacement`
+  },
+  {
+    key: "pickup",
+    title: "Waiver Find of the Year",
+    winner: bestPickupAward.player_name,
+    manager: bestPickupAward.team_name,
+    stat: `#${bestPickupAward.bbm_rank || "—"}`,
+    detail: `final BBM rank · added ${shortDate(bestPickupAward.pickup_date)} · held ${bestPickupAward.held_days} days`
+  },
+  {
+    key: "steal",
+    art: "../design/share-card-art/draft-night-heist.webp",
+    title: "Draft Night Heist",
+    winner: bestStealAward.player_name,
+    manager: bestStealAward.team_name,
+    stat: `+${bestStealAward.draft_position_gain}`,
+    detail: `drafted ${bestStealAward.pick}th · finished BBM rank ${bestStealAward.bbm_rank}`
+  },
+  {
+    key: "category",
+    art: "../design/share-card-art/weekly-steals-record.webp",
+    title: "Weekly Steals Record",
+    winner: weeklyStealsRecord.team_name,
+    manager: weeklyStealsManager,
+    stat: `${weeklyStealsRecord.steals} STL`,
+    detail: `Week ${weeklyStealsRecord.week} · most steals by any team in a single matchup week`
+  },
+  {
+    key: "activity",
+    title: "Transaction Machine",
+    winner: mostActive.team_name,
+    manager: mostActive.manager_name,
+    stat: `${mostActive.number_of_moves}`,
+    detail: `Yahoo moves · ${mostActive.action_count} player actions · ${mostActive.number_of_trades} completed trades`
+  }
+];
+
+const moments = [
+  {
+    key: "photo-finish",
+    art: "../design/share-card-art/weekly-steals-record.webp",
+    title: "Playoff Win by One Steal",
+    winner: "Nick P's Team",
+    manager: "Nicholas",
+    stat: "45–44",
+    detail: "Week 22 · beat Ronit’s Reasonable Team 5–4 by taking steals by one",
+    footer: "Playoff moment"
+  },
+  {
+    key: "photo-finish",
+    art: "../design/share-card-art/weekly-steals-record.webp",
+    title: "One-Steal Escape",
+    winner: "go nembHard or go home",
+    manager: "Daniel",
+    stat: "36–35",
+    detail: "Week 5 · beat Cade and em 5–4 with a one-steal category margin",
+    footer: "Matchup moment"
+  },
+  {
+    key: "photo-finish",
+    title: "One-Thousandth",
+    winner: "go nembHard or go home",
+    manager: "Daniel",
+    stat: ".460–.459",
+    detail: "Week 17 · beat Shanghai Sharks 5–4 with a .001 FG% edge",
+    footer: "Matchup moment"
+  },
+  {
+    key: "last-day",
+    art: "../design/share-card-art/last-day-gamble.webp",
+    title: "Last-Day Gamble",
+    winner: "Jet's Fascinating Team",
+    manager: "Jet",
+    stat: "5–4",
+    detail: "Week 20 · added Killian Hayes on Sunday, then beat Stuart by two assists and two fewer turnovers",
+    footer: "Transaction timing verified"
+  }
+];
+
+function awardCard(award, index, preview=false, collection=awards) {
+  return `<button class="award-card ${award.art ? "has-art" : ""}" data-award="${esc(award.key)}" data-award-index="${index}" ${preview ? 'tabindex="-1"' : ""} aria-label="${esc(award.title)}: ${esc(award.winner)}">
+    <span class="award-visual">
+      ${award.art ? `<span class="award-art" style="background-image:url('${esc(award.art)}')"></span>` : ""}
+      <span class="award-topline"><span>SAS · 2025–26</span><span class="award-number">${String(index + 1).padStart(2,"0")} / ${String(collection.length).padStart(2,"0")}</span></span>
+    </span>
+    <span class="award-content">
+      <span class="award-copy">
+        <span class="award-title">${esc(award.title)}</span>
+        <span class="award-winner">${esc(award.winner)}</span>
+        <span class="award-manager">${esc(award.manager)}</span>
+      </span>
+      <span class="award-stat"><strong>${esc(award.stat)}</strong><span>${esc(award.detail)}</span></span>
+      <span class="award-footer"><span>${esc(award.footer || "Season award")}</span><span>Fantasy basketball</span></span>
+    </span>
+  </button>`;
+}
+
+const shareCards = [...awards, ...moments];
+document.querySelector("#share-cards-grid").innerHTML = shareCards.map((card,index) => awardCard(card,index,false,shareCards)).join("");
+const awardModal = document.querySelector("#award-modal");
+const closeAwardModal = () => {
+  awardModal.classList.remove("open");
+  document.body.style.overflow = "";
+};
+for (const card of document.querySelectorAll("#share-cards-grid .award-card")) {
+  card.addEventListener("click", () => {
+    const index = num(card.dataset.awardIndex);
+    document.querySelector("#award-modal-card").innerHTML = awardCard(shareCards[index], index, true, shareCards);
+    awardModal.classList.add("open");
+    document.body.style.overflow = "hidden";
+  });
+}
+document.querySelector("#award-close").addEventListener("click", closeAwardModal);
+awardModal.addEventListener("click", event => {
+  if (event.target === awardModal) closeAwardModal();
+});
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && awardModal.classList.contains("open")) closeAwardModal();
+});
 
 function barChart(target, rows, valueKey, formatter, className="") {
   const max = Math.max(...rows.map(row => num(row[valueKey])), .0001);
